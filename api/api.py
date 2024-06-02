@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 from crawler.crawler import get_shops
+from params import URL
 
 app = FastAPI()
 
@@ -9,6 +10,6 @@ def index():
 
 @app.get('/crawl')
 def crawl(plz):
-    url = "https://www.dm.de/koro-pistazienschnitte-mit-45-prozent-pistazie-p4255582809893.html"
+    url = URL
     result = get_shops(url, plz)
     return result

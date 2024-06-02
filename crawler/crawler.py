@@ -4,13 +4,25 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from bs4 import BeautifulSoup
+from params import CHROMEPATH
+
 import re
 import time
 
 def set_up_driver(url):
-    path = "/usr/local/bin/chromedriver"
 
-    service = Service(executable_path=path)
+    chromeOptions = webdriver.ChromeOptions()
+    chromeOptions.add_argument("--headless")
+    chromeOptions.add_argument("--no-sandbox")
+    chromeOptions.add_argument("--disable-setuid-sandbox")
+    chromeOptions.add_argument("--disable-dev-shm-usage")
+    chromeOptions.add_argument("--disable-extensions")
+    chromeOptions.add_argument("--disable-gpu")
+    chromeOptions.add_argument("start-minimized")
+    chromeOptions.add_argument("disable-infobars")
+    chromeOptions.add_argument("--remote-debugging-port=9222")
+
+    service = Service(executable_path=CHROMEPATH)
     driver = webdriver.Chrome(service=service)
     driver.get(url)
 
@@ -39,15 +51,12 @@ def crawl(url, plz):
         driver.execute_script("arguments[0].click();", search_button)
 
         # Get the page source after the results are loaded
-        time.sleep(3)
+        time.sleep(7)
         source = driver.page_source
-    except Exception as e:
-        print(f"An error occurred: {e}")
-
-    finally:
-        # Optional: Close the driver after the task is done
         driver.quit()
         return source
+    except Exception as e:
+        print(f"An error occurred: {e}")
 
 def get_shops(url, plz):
 
