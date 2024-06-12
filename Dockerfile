@@ -9,10 +9,10 @@ RUN apt-get update && \
 
 # Install necessary dependencies
 RUN apt-get install -y \
-fonts-liberation \
-libappindicator3-1 \
-xdg-utils \
-&& rm -rf /var/lib/apt/lists/*
+    fonts-liberation \
+    libappindicator3-1 \
+    xdg-utils \
+    && rm -rf /var/lib/apt/lists/*
 
 # Create a non-root user and set up the environment
 RUN useradd -m seleniumuser
