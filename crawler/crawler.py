@@ -1,100 +1,78 @@
-from selenium.webdriver.chrome.service import Service
-from selenium import webdriver
-from selenium.webdriver.common.by import By
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
-from bs4 import BeautifulSoup
-from params import CHROMEPATH
+import requests
+from geopy.geocoders import Nominatim
+from geopy.exc import GeocoderTimedOut, GeocoderServiceError
 
-import re
-import time
-
-def set_up_driver(url):
-    chromeOptions = webdriver.ChromeOptions()
-    chromeOptions.add_argument("--headless")
-    chromeOptions.add_argument("--start-maximized")
-    chromeOptions.add_argument("--disable-dev-shm-usage")
-    chromeOptions.add_argument("--disable-extensions")
-    chromeOptions.add_argument("--disable-gpu")
-    chromeOptions.add_argument("--window-size=1920x1080")
-    chromeOptions.add_argument("--disable-blink-features=AutomationControlled")
-    chromeOptions.add_experimental_option("excludeSwitches", ["enable-automation"])
-    chromeOptions.add_experimental_option('useAutomationExtension', False)
-
-    service = Service(executable_path=CHROMEPATH)
-    driver = webdriver.Chrome(service=service, options=chromeOptions)
-    driver.get(url)
-
-    return driver
-
-def crawl(url, plz):
-    driver = set_up_driver(url)
+def get_bbox(postal_code, country="Germany"):
+    geolocator = Nominatim(user_agent="geoapiExercises")
 
     try:
-        parent_div = WebDriverWait(driver, 20).until(EC.presence_of_element_located((By.ID, "usercentrics-root")))
-        shadowRoot = driver.execute_script("return arguments[0].shadowRoot", parent_div)
-        print("shadowroot found")
+        location = geolocator.geocode({"postalcode": postal_code, "country": country}, exactly_one=True)
+        if location and location.raw.get('boundingbox'):
+            bbox = location.raw['boundingbox']
+            # The bounding box is provided as [south_lat, north_lat, west_lng, east_lng]
+            sw = (float(bbox[0]), float(bbox[2]))
+            ne = (float(bbox[1]), float(bbox[3]))
+            return (sw, ne)
+        else:
+            return None, None
+    except (GeocoderTimedOut, GeocoderServiceError) as e:
+        print(f"Error: {e}")
+        return None, None
 
-        button = WebDriverWait(shadowRoot, 10).until(EC.element_to_be_clickable((By.CSS_SELECTOR, ".uc-deny-all")))
-        button.click()
-        print("cookies clicked")
+def expand_bbox(bbox, expand_by=0.1):
+    expanded_bbox_sw = (bbox[0][0] - expand_by, bbox[0][1] - expand_by)
+    expanded_bbox_ne = (bbox[1][0] + expand_by, bbox[1][1] + expand_by)
 
-        button_to_open_popup = WebDriverWait(driver, 10).until(
-            EC.element_to_be_clickable((By.XPATH, "//button[text()='Verfügbarkeit in einem dm-Markt prüfen']"))
-        )
-        print("Verfügbarkeit button found")
-        button_to_open_popup.click()
-        print("Verfügbarkeit button clicked")
+    return (expanded_bbox_sw, expanded_bbox_ne)
 
-        # Wait for the popup layer to appear
-        popup_layer = WebDriverWait(driver, 20).until(
-            EC.visibility_of_element_located((By.CSS_SELECTOR, "[data-dmid='storefinder-search-layer']"))
-        )
-        print("Popup layer appeared")
 
-        # Explicitly scroll the input field into view
-        input_field = WebDriverWait(driver, 20).until(
-            EC.presence_of_element_located((By.CSS_SELECTOR, "input[aria-label='Suche nach PLZ, Straße oder Ort']"))
-        )
-        driver.execute_script("arguments[0].scrollIntoView(true);", input_field)
-        WebDriverWait(driver, 20).until(EC.element_to_be_clickable((By.CSS_SELECTOR, "input[aria-label='Suche nach PLZ, Straße oder Ort']")))
-        print("plz search bar found")
-        input_field.send_keys(plz)
+def get_api_data(url):
+    """
+    Fetch data from the given API endpoint using GET request.
 
-        search_button = WebDriverWait(driver, 20).until(
-            EC.element_to_be_clickable((By.CSS_SELECTOR, "button[aria-label='Suche absenden']"))
-        )
-        driver.execute_script("arguments[0].click();", search_button)
+    :param url: The API endpoint URL.
+    :param params: (Optional) Dictionary of query parameters to append to the URL.
+    :return: Response data in JSON format if the request is successful, None otherwise.
+    """
+    try:
+        response = requests.get(url)
+        response.raise_for_status()  # Raise an exception for HTTP errors
+        return response.json()  # Assuming the response contains JSON data
+    except requests.exceptions.HTTPError as http_err:
+        print(f"HTTP error occurred: {http_err}")
+    except requests.exceptions.RequestException as req_err:
+        print(f"Error occurred: {req_err}")
+    return None
 
-        print("plz sent")
-        print("search_button clicked")
+def get_stores(plz):
+    bbox = get_bbox(plz)
+    ebbox = expand_bbox(bbox)
 
-        time.sleep(7)
-        source = driver.page_source
-        print("source:")
-        print(source)
-        driver.quit()
-        return source
-    except Exception as e:
-        print(f"An error occurred: {e}")
-        driver.quit()
-        return None
+    store_url = f"https://store-data-service.services.dmtech.com/stores/bbox/{ebbox[1][0]}%2C{ebbox[0][1]}%2C{ebbox[0][0]}%2C{ebbox[1][1]}?countryCode=DE&fields=storeId,address"
 
-def get_shops(url, plz):
-    source = crawl(url, plz)
-    if source is None:
-        print("Failed to retrieve the page source.")
-        return {}
+    store_data = get_api_data(store_url)
 
-    soup = BeautifulSoup(source, 'html.parser')
-    store_teasers = soup.find_all(attrs={"data-dmid": "store-teaser"})
+    ids = [store_data['stores'][i]['storeId'] for i in range(len(store_data['stores']))]
+    addresses = [store_data['stores'][i]['address']['street'] + ", " + store_data['stores'][i]['address']['zip']
+                 for i in range(len(store_data['stores']))]
 
-    shop_dict = {}
-    for teaser in store_teasers:
-        verf = teaser.find('span', {'data-dmid': 'availability-hint-text-container'}).text.strip()
-        if "Momentan verfügbar" in verf:
-            address = teaser.find('div', {'data-dmid': 'store-teaser-street'}).text.strip()
-            stueck = re.search(r'\((\d+ Stück)\)', verf).group(1)
-            shop_dict[address] = stueck
+    address_dict = dict(zip(ids, addresses))
+    return address_dict
 
-    return shop_dict
+def get_stocks(address_dict):
+    ids = list(address_dict.keys())
+    stock_url = "https://products.dm.de/store-availability/DE/availabilities/map/dans/1304593?storeIds=" + ",".join(ids)
+    stock_data = get_api_data(stock_url)
+
+    stock_dict = {}
+
+    for k, d in stock_data['storeAvailabilitiesByStoreId'].items():
+        if d['status']['code'] == 'OK':
+            stock_dict[address_dict[k]] = d['stockLevel']
+
+    return stock_dict
+
+if __name__=="__main__":
+    stores = get_stores(53229)
+    stocks = get_stocks(stores)
+    print(stocks)

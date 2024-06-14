@@ -1,6 +1,5 @@
 from fastapi import FastAPI
-from crawler.crawler import get_shops
-from params import URL
+from crawler.crawler import get_stores, get_stocks
 
 app = FastAPI()
 
@@ -10,6 +9,6 @@ def index():
 
 @app.get('/crawl')
 def crawl(plz):
-    url = URL
-    result = get_shops(url, plz)
-    return result
+    stores = get_stores(53229)
+    stocks = get_stocks(stores)
+    return stocks
