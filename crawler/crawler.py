@@ -1,4 +1,5 @@
 import requests
+import argparse
 from geopy.geocoders import Nominatim
 from geopy.exc import GeocoderTimedOut, GeocoderServiceError
 
@@ -72,7 +73,12 @@ def get_stocks(address_dict):
 
     return stock_dict
 
-if __name__=="__main__":
-    stores = get_stores(53229)
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description='Get stocks from stores.')
+    parser.add_argument('plz', type=int, help='Zip code to get stores')
+
+    args = parser.parse_args()
+
+    stores = get_stores(args.plz)
     stocks = get_stocks(stores)
     print(stocks)

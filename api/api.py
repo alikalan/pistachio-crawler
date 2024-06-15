@@ -9,6 +9,6 @@ def index():
 
 @app.get('/crawl')
 def crawl(plz):
-    stores = get_stores(53229)
+    stores = get_stores(int(plz))
     stocks = get_stocks(stores)
     return stocks
