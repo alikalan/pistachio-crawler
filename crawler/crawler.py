@@ -4,7 +4,7 @@ from geopy.geocoders import Nominatim
 from geopy.exc import GeocoderTimedOut, GeocoderServiceError
 
 def get_bbox(postal_code, country="Germany"):
-    geolocator = Nominatim(user_agent="geoapiExercises")
+    geolocator = Nominatim(user_agent="pistachiocrawler")
 
     try:
         location = geolocator.geocode({"postalcode": postal_code, "country": country}, exactly_one=True)
@@ -15,12 +15,12 @@ def get_bbox(postal_code, country="Germany"):
             ne = (float(bbox[1]), float(bbox[3]))
             return (sw, ne)
         else:
-            return None, None
+            raise ValueError("Location was not found or bounding box is missing")
     except (GeocoderTimedOut, GeocoderServiceError) as e:
-        print(f"Error: {e}")
-        return None, None
+        raise e
 
 def expand_bbox(bbox, expand_by=0.1):
+    # TODO: Deal with Nonetype
     expanded_bbox_sw = (bbox[0][0] - expand_by, bbox[0][1] - expand_by)
     expanded_bbox_ne = (bbox[1][0] + expand_by, bbox[1][1] + expand_by)
 
