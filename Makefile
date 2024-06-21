@@ -1,5 +1,5 @@
 install:
-	@pip install -e .
+	@pip install -r requirements.txt
 
 clean:
 	@rm -f */version.txt
